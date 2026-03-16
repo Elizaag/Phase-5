@@ -22,6 +22,7 @@ module EX_MEM (
     input [31:0] iPC,
     input [2:0]  iFunct3,
     input [4:0]  iRd,
+    input [4:0]  iRs2,
 
     // Control signals out
     output reg        oLui,
@@ -41,7 +42,8 @@ module EX_MEM (
     output reg [31:0] oPcPlus4,
     output reg [31:0] oPC,
     output reg [2:0]  oFunct3,
-    output reg [4:0]  oRd
+    output reg [4:0]  oRd,
+    output reg [4:0]  oRs2
 );
 
     always @(posedge iClk or negedge iRstN) begin
@@ -62,6 +64,7 @@ module EX_MEM (
             oPC       <= 32'b0;
             oFunct3   <= 3'b0;
             oRd       <= 5'b0;
+            oRs2      <= 5'b0;
         end else begin
             oLui      <= iLui;
             oMemRd    <= iMemRd;
@@ -79,6 +82,7 @@ module EX_MEM (
             oPC       <= iPC;
             oFunct3   <= iFunct3;
             oRd       <= iRd;
+            oRs2      <= iRs2;
         end
     end
 

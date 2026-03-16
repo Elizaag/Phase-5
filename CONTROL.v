@@ -10,7 +10,9 @@ module CONTROL (
     output        oAluSrc2,
     output        oRegWrite,
     output        oBranch,
-    output        oJump
+    output        oJump,
+    output        oFalseRs1,
+    output        oFalseRs2
 );
 
     // Internal control registers
@@ -25,6 +27,8 @@ module CONTROL (
     reg        rRegWrite;
     reg        rBranch;
     reg        rJump;
+    reg        rFalseRs1;
+    reg        rFalseRs2;
 
     // Drive outputs
     assign oLui       = rLui;
@@ -53,6 +57,8 @@ module CONTROL (
         rRegWrite  = 1'b0;
         rBranch    = 1'b0;
         rJump      = 1'b0;
+        rFalseRs1  = 1'b0;
+        rFalseRs2  = 1'b0;
 
         case (iOpcode)
 
@@ -67,6 +73,7 @@ module CONTROL (
                 rAluOp    = 3'b011;
                 rAluSrc2 = 1'b1;
                 rRegWrite = 1'b1;
+                rFalseRs2 = 1'b1;
             end
 
             // Loads
@@ -83,6 +90,7 @@ module CONTROL (
                 rMemWr    = 1'b1;
                 rAluSrc2 = 1'b1;
                 rAluOp   = 3'b000;
+                rFalseRs2 = 1'b1;
             end
 
             // Branches
@@ -98,6 +106,8 @@ module CONTROL (
                 rAluSrc1  = 1'b1;
                 rAluSrc2  = 1'b1;
                 rAluOp    = 3'b000;
+                rFalseRs1 = 1'b1;
+                rFalseRs2 = 1'b1;
             end
 
             // JALR
@@ -107,13 +117,17 @@ module CONTROL (
                 rAluSrc2 = 1'b1;
                 rRegWrite = 1'b1;
                 rAluOp    = 3'b000;
+                rFalseRs2 = 1'b1;
             end
 
             // LUI
             7'b0110111: begin
                 rLui      = 1'b1;
                 rRegWrite = 1'b1;
+                rAluSrc2  = 1'b1;
                 rAluOp    = 3'b000;
+                rFalseRs1 = 1'b1;
+                rFalseRs2 = 1'b1;
             end
 
             // AUIPC
@@ -122,6 +136,8 @@ module CONTROL (
                 rAluSrc2  = 1'b1;
                 rRegWrite = 1'b1;
                 rAluOp    = 3'b000;
+                rFalseRs1 = 1'b1;
+                rFalseRs2 = 1'b1;
             end
 
             default: begin

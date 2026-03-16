@@ -245,8 +245,22 @@ class Assembler:
                 if " " in lbl and not lbl.startswith("."): # Basic check for bad label
                     break 
                 if lbl in self.labels: raise ValueError(f"Duplicate label: {lbl}")
-                self.labels[lbl] = self.pc
-                line = rest.strip()
+                if section == "data":
+                    # Assign label after processing .word/.byte/.space/.ascii
+                    # Save rest of line for later
+                    pending_label = lbl
+                    line = rest.strip()
+                    # If next is .word/.byte/.space/.ascii, process and then assign label
+                    m = re.match(r"^\.(\w+)", line)
+                    if m:
+                        self.handle_data(line, ln)
+                        self.labels[pending_label] = self.data_pc - self.get_data_size(line)
+                        line = ''
+                    else:
+                        self.labels[pending_label] = self.data_pc
+                else:
+                    self.labels[lbl] = self.pc
+                    line = rest.strip()
             
             if not line: continue
 
@@ -271,6 +285,21 @@ class Assembler:
                 
                 self.instrs.append(InstrRecord(ln, mnem, ops, self.pc))
                 self.pc += size
+
+    def get_data_size(self, line: str) -> int:
+        m = re.match(r"^\.(\w+)\s*(.*)$", line)
+        if not m:
+            return 0
+        d, args = m.group(1), m.group(2).strip()
+        if d == "word":
+            return 4 * len(split_operands(args))
+        elif d == "byte":
+            return len(split_operands(args))
+        elif d == "space":
+            return parse_imm(args)
+        elif d in ("ascii", "asciiz"):
+            return len(args)
+        return 0
 
     def handle_data(self, line: str, ln: int):
         m = re.match(r"^\.(\w+)\s*(.*)$", line)
@@ -476,14 +505,11 @@ def write_little_endian_bytes(filepath: str, words: List[int]) -> None:
 
 def main():
     if len(sys.argv) != 3:
-        print("Usage: python assembler.py <base_path> <file.s>", file=sys.stderr)
+        print("Usage: python assembler.py <file.s> <out_dir>", file=sys.stderr)
         return 2
 
-    base_path = sys.argv[1]
-    asm_file  = sys.argv[2]
-
-    full_path = asm_file if os.path.isabs(asm_file) else os.path.join(base_path, asm_file)
-    out_dir   = os.path.dirname(full_path) or "."
+    out_dir = sys.argv[2]
+    full_path  = sys.argv[1]
 
     try:
         with open(full_path, "r") as f:

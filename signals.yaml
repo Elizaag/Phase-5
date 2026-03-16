@@ -1,0 +1,4 @@
+IF_ID_Instruction: ("if_id_instr") # pipelined register that holds the instrucion being output from the IF stage, not the PC register.
+IF_ID_PC: ("if_id_pc") # pipelined register that holds the PC being output from the IF stage.
+Data_Memory: ("data_memory", "rDataMem") # data memory registers
+trace: [if_id_reg, id_ex_reg, ex_mem_reg, mem_wb_reg, hazard_detect, fwd_unit, data_memory]

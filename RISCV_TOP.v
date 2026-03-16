@@ -62,7 +62,7 @@ module RISCV_TOP (
     // ID Stage: Decode
     // ==========================================================
     wire [6:0]  id_opcode;
-    wire [4:0]  id_rd, id_rs1, id_rs2;
+    wire [4:0]  id_rd, id_rs1_pre, id_rs1, id_rs2;
     wire [2:0]  id_funct3;
     wire [6:0]  id_funct7;
     wire [31:0] id_imm;
@@ -72,11 +72,13 @@ module RISCV_TOP (
         .oOpcode(id_opcode),
         .oRd(id_rd),
         .oFunct3(id_funct3),
-        .oRs1(id_rs1),
+        .oRs1(id_rs1_pre),
         .oRs2(id_rs2),
         .oFunct7(id_funct7),
         .oImm(id_imm)
     );
+
+    assign id_rs1 = (id_lui) ? 5'b0 : id_rs1_pre;
 
     // ==========================================================
     // ID Stage: Control
@@ -85,6 +87,7 @@ module RISCV_TOP (
     wire        id_memtoReg, id_aluSrc1, id_aluSrc2;
     wire        id_regWrite, id_branch, id_jump;
     wire [2:0]  id_aluOp;
+    wire        id_falseRs1, id_falseRs2; // for hazard detection (true if instruction doesn't actually use the register)
 
     CONTROL control (
         .iOpcode(id_opcode),
@@ -98,7 +101,9 @@ module RISCV_TOP (
         .oAluSrc2(id_aluSrc2),
         .oRegWrite(id_regWrite),
         .oBranch(id_branch),
-        .oJump(id_jump)
+        .oJump(id_jump),
+        .oFalseRs1(id_falseRs1),
+        .oFalseRs2(id_falseRs2)
     );
 
     // ==========================================================
@@ -127,14 +132,17 @@ module RISCV_TOP (
     // ==========================================================
     // Hazard Detection Unit
     // ==========================================================
-    wire       id_ex_memRd_fwd;   // from ID/EX (declared after ID/EX reg below)
+    wire       id_ex_memRd_fwd, id_memWr_fwd;   // from ID/EX (declared after ID/EX reg below)
     wire [4:0] id_ex_rd_fwd;
 
     HAZARD_DETECTION hazard_detect (
         .iID_EX_MemRd(id_ex_memRd_fwd),
+        .iID_EX_MemWr(id_memWr_fwd),
         .iID_EX_Rd(id_ex_rd_fwd),
         .iIF_ID_Rs1(id_rs1),
         .iIF_ID_Rs2(id_rs2),
+        .iFalseRs1(id_falseRs1),
+        .iFalseRs2(id_falseRs2),
         .oPCWrite(pcWrite),
         .oIF_IDWrite(if_id_write),
         .oID_EX_Flush(id_ex_flush)
@@ -154,6 +162,7 @@ module RISCV_TOP (
 
     // connect hazard detection wires
     assign id_ex_memRd_fwd = id_ex_memRd;
+    assign id_memWr_fwd = id_memWr;
     assign id_ex_rd_fwd    = id_ex_rd;
 
     ID_EX id_ex_reg (
@@ -210,6 +219,7 @@ module RISCV_TOP (
     // EX Stage: Forwarding Unit
     // ==========================================================
     wire [1:0] forwardA, forwardB;
+    wire       forwardM; // forwarding control signals for ALU inputs and MEM stage
 
     // EX/MEM and MEM/WB wires needed here (declared ahead, driven after)
     wire        ex_mem_regWrite;
@@ -221,10 +231,14 @@ module RISCV_TOP (
         .iID_EX_Rs2(id_ex_rs2),
         .iEX_MEM_Rd(ex_mem_rd),
         .iEX_MEM_RegWrite(ex_mem_regWrite),
+        .iEX_MEM_DataWrite(ex_mem_memWr), // for store instructions, we need to forward to the memory stage instead of the ALU
         .iMEM_WB_Rd(mem_wb_rd),
         .iMEM_WB_RegWrite(mem_wb_regWrite),
+        .iEX_MEM_Rs2Addr(ex_mem_rs2),
+        .iMEM_WB_DataRead(mem_wb_memtoReg), // for load instructions, we need to forward the loaded value from MEM/WB
         .oForwardA(forwardA),
-        .oForwardB(forwardB)
+        .oForwardB(forwardB),
+        .oForwardM(forwardM)
     );
 
     // ==========================================================
@@ -331,6 +345,7 @@ module RISCV_TOP (
     wire        ex_mem_aluZero;
     wire [31:0] ex_mem_rs2Data, ex_mem_imm, ex_mem_pcPlus4, ex_mem_pc;
     wire [2:0]  ex_mem_funct3;
+    wire [4:0]  ex_mem_rs2;
 
     EX_MEM ex_mem_reg (
         .iClk(iClk),
@@ -354,6 +369,7 @@ module RISCV_TOP (
         .iPC(id_ex_pc),
         .iFunct3(id_ex_funct3),
         .iRd(id_ex_rd),
+        .iRs2(id_ex_rs2),
         // control out
         .oLui(ex_mem_lui),
         .oMemRd(ex_mem_memRd),
@@ -371,19 +387,22 @@ module RISCV_TOP (
         .oPcPlus4(ex_mem_pcPlus4),
         .oPC(ex_mem_pc),
         .oFunct3(ex_mem_funct3),
-        .oRd(ex_mem_rd)
+        .oRd(ex_mem_rd),
+        .oRs2(ex_mem_rs2)
     );
 
     // ==========================================================
     // MEM Stage: Data Memory
     // ==========================================================
-    wire [31:0] mem_readData;
+    wire [31:0] mem_readData, ex_mem_fwd_data;
+
+    assign ex_mem_fwd_data = (forwardM) ? mem_wb_memReadData : ex_mem_rs2Data;
 
     DATA_MEMORY data_memory (
         .iClk(iClk),
         .iRstN(iRstN),
         .iAddress(ex_mem_aluOut),
-        .iWriteData(ex_mem_rs2Data),
+        .iWriteData(ex_mem_fwd_data),
         .iFunct3(ex_mem_funct3),
         .iMemWrite(ex_mem_memWr),
         .iMemRead(ex_mem_memRd),

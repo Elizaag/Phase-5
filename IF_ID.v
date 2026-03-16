@@ -10,25 +10,15 @@ module IF_ID (
 );
 
     always @(posedge iClk or negedge iRstN) begin
-    //active low asynchronous reset
-        if (!iRstN) begin 
+        if (!iRstN) begin
             oPC    <= 32'b0;
-            oInstr <= 32'b0;
-            
-     //Flush to take priority over stall 
+            oInstr <= 32'h13;
         end else if (iFlush) begin
             oPC    <= 32'b0;
-            oInstr <= 32'b0;
-            
-     //Stall signal will be 1 or 0
-     //if iStall is 1, normal operation, IF_ID updates with new PC and new Instruction
-     //if iStall is 0, IF_ID ignores the clock edge and holds what it currently has
-     //Will only update when not stalling
+            oInstr <= 32'h13;
         end else if (!iStall) begin
             oPC    <= iPC;
             oInstr <= iInstr;
         end
     end
-    
-
 endmodule
